@@ -19,16 +19,35 @@ Cover text with the decisions and what was skipped (Czech, as the assignment ask
 
 ## Requirements
 
-- .NET 10 SDK (developed on 10.0.113)
-- SQL Server 2019+ (a local instance, or Docker via `docker-compose.yml`)
+- Quick run: Docker with Compose v2
+- Local development: .NET 10 SDK (developed on 10.0.113) and SQL Server 2019+ (a local instance or the `db` container)
 - `sqlcmd` for the SQL script and the scenarios; `bash` and `curl` for the scenarios
 
-## Quick start (Docker, Linux/macOS)
+## Quick run (everything in Docker)
+
+```bash
+cp .env.example .env              # set MSSQL_SA_PASSWORD (min. 8 chars, upper + lower case, digit)
+docker compose up --build         # SQL Server, database from db/NewsletterSubscription.sql, app
+```
+
+Open <http://localhost:5080/newsletter>. `db-init` creates `NewsletterTest` and runs the SQL script with the classic
+`sqlcmd` once SQL Server is healthy; `web` starts after it succeeds. Logs, including the confirmation and unsubscribe
+links: `docker compose logs -f web`. Stop: `Ctrl+C`, then `docker compose down`.
+
+Scenarios against this stack (SQL Server is published on `localhost:1433`):
+
+```bash
+SQLCMDPASSWORD=<password from .env> scripts/run-scenarios.sh
+```
+
+Database down: `docker compose stop db` while `web` runs, submit the form, then `docker compose start db`.
+
+## Develop locally (dotnet run, Docker only for SQL Server)
 
 ```bash
 cp .env.example .env                      # set MSSQL_SA_PASSWORD in .env (min. 8 chars, upper + lower case, digit)
 export SQLCMDPASSWORD=<same password as in .env>
-docker compose up -d --wait
+docker compose up -d --wait db
 sqlcmd -S localhost -U sa -C -Q "CREATE DATABASE NewsletterTest"
 sqlcmd -S localhost -U sa -C -d NewsletterTest -b -i db/NewsletterSubscription.sql
 export ConnectionStrings__Newsletter="Server=localhost;Database=NewsletterTest;User Id=sa;Password=$SQLCMDPASSWORD;TrustServerCertificate=true;Connect Timeout=5"
@@ -104,7 +123,7 @@ It runs: subscribe, subscribe again with different letter case, confirm, confirm
 again, unknown token, invalid input, POST without the antiforgery token and 10 parallel subscribes of one address.
 It prints the HTTP status of each step and the row count, and exits non-zero on any failure.
 
-Database down: stop SQL Server (`docker compose stop mssql`) and submit the form. The page returns HTTP 200 with
+Database down: stop SQL Server (`docker compose stop db`) and submit the form. The page returns HTTP 200 with
 "Služba je dočasně nedostupná" (`data-result-code="ServiceUnavailable"`) and the exception is in the log.
 
 Your own script: `POST /newsletter/subscribe` needs the antiforgery token. First load `GET /newsletter` with cookies
@@ -121,6 +140,7 @@ enabled, take `__RequestVerificationToken` from the form and send it with the co
 | `db/NewsletterSubscription.sql` | table, indexes, 3 procedures, 2 test rows |
 | `tests/Polo3.Newsletter.Tests` | service layer unit tests with a fake repository |
 | `scripts/run-scenarios.sh` | assignment scenarios (curl + sqlcmd) |
+| `Dockerfile`, `docker-compose.yml` | quick run: `db` (SQL Server), `db-init` (runs the SQL script), `web` (the app, non-root) |
 
 ## Decisions
 

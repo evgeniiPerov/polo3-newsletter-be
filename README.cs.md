@@ -19,16 +19,35 @@ Průvodní text s rozhodnutími a tím, co jsem vynechal: [PRUVODNI_TEXT.md](PRU
 
 ## Požadavky
 
-- .NET 10 SDK (vyvíjeno na 10.0.113)
-- SQL Server 2019+ (lokální instance, nebo Docker přes `docker-compose.yml`)
+- Rychlé spuštění: Docker s Compose v2
+- Vývoj lokálně: .NET 10 SDK (vyvíjeno na 10.0.113) a SQL Server 2019+ (lokální instance nebo kontejner `db`)
 - `sqlcmd` pro SQL skript a scénáře; `bash` a `curl` pro scénáře
 
-## Rychlý start (Docker, Linux/macOS)
+## Rychlé spuštění (vše v Dockeru)
+
+```bash
+cp .env.example .env              # nastavte MSSQL_SA_PASSWORD (min. 8 znaků, velká/malá písmena, číslice)
+docker compose up --build         # SQL Server, databáze ze skriptu db/NewsletterSubscription.sql, aplikace
+```
+
+Otevřete <http://localhost:5080/newsletter>. `db-init` po startu SQL Serveru vytvoří `NewsletterTest` a spustí SQL skript
+klasickým `sqlcmd`; `web` se spustí až po jeho úspěchu. Logy včetně potvrzovacích a odhlašovacích odkazů:
+`docker compose logs -f web`. Zastavení: `Ctrl+C`, pak `docker compose down`.
+
+Scénáře proti tomuto prostředí (SQL Server je dostupný na `localhost:1433`):
+
+```bash
+SQLCMDPASSWORD=<heslo z .env> scripts/run-scenarios.sh
+```
+
+Nedostupná databáze: `docker compose stop db` za běhu `web`, odešlete formulář, pak `docker compose start db`.
+
+## Vývoj lokálně (dotnet run, Docker jen pro SQL Server)
 
 ```bash
 cp .env.example .env                      # v .env nastavte MSSQL_SA_PASSWORD (min. 8 znaků, velká/malá písmena, číslice)
 export SQLCMDPASSWORD=<stejné heslo jako v .env>
-docker compose up -d --wait
+docker compose up -d --wait db
 sqlcmd -S localhost -U sa -C -Q "CREATE DATABASE NewsletterTest"
 sqlcmd -S localhost -U sa -C -d NewsletterTest -b -i db/NewsletterSubscription.sql
 export ConnectionStrings__Newsletter="Server=localhost;Database=NewsletterTest;User Id=sa;Password=$SQLCMDPASSWORD;TrustServerCertificate=true;Connect Timeout=5"
@@ -104,7 +123,7 @@ Projde registraci, opakovanou registraci s jinou velikostí písmen, potvrzení,
 opakované odhlášení, neznámý token, neplatný vstup, POST bez antiforgery tokenu a 10 souběžných registrací
 stejné adresy. Vypíše HTTP kód každého kroku a počet řádků; při chybě skončí nenulovým kódem.
 
-Nedostupná databáze: zastavte SQL Server (`docker compose stop mssql`) a odešlete formulář. Stránka vrátí
+Nedostupná databáze: zastavte SQL Server (`docker compose stop db`) a odešlete formulář. Stránka vrátí
 HTTP 200 s hláškou „Služba je dočasně nedostupná“ (`data-result-code="ServiceUnavailable"`), výjimka je v logu.
 
 Vlastní skript: `POST /newsletter/subscribe` vyžaduje antiforgery token. Nejdřív načtěte `GET /newsletter`
@@ -121,6 +140,7 @@ se zapnutými cookies, z formuláře vezměte `__RequestVerificationToken` a po�
 | `db/NewsletterSubscription.sql` | tabulka, indexy, 3 procedury, 2 testovací řádky |
 | `tests/Polo3.Newsletter.Tests` | jednotkové testy service vrstvy s falešným repository |
 | `scripts/run-scenarios.sh` | scénáře ze zadání (curl + sqlcmd) |
+| `Dockerfile`, `docker-compose.yml` | rychlé spuštění: `db` (SQL Server), `db-init` (spustí SQL skript), `web` (aplikace, bez roota) |
 
 ## Rozhodnutí
 
