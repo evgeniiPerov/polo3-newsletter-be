@@ -20,6 +20,23 @@ Praktický úkol BE pro pozici Vývojář e-shopu POLO3. Průvodní text: [PRUVO
   a spusťte `docker compose up -d --wait`)
 - `sqlcmd` (pro skript databáze a scénáře), `curl` a bash (pro scénáře)
 
+## Rychlý start (Docker, Linux/macOS)
+
+```bash
+cp .env.example .env                      # v .env nastavte MSSQL_SA_PASSWORD (min. 8 znaků, velká/malá písmena, číslice)
+export SQLCMDPASSWORD=<stejné heslo jako v .env>
+docker compose up -d --wait
+sqlcmd -S localhost -U sa -C -Q "CREATE DATABASE NewsletterTest"
+sqlcmd -S localhost -U sa -C -d NewsletterTest -b -i db/NewsletterSubscription.sql
+export ConnectionStrings__Newsletter="Server=localhost;Database=NewsletterTest;User Id=sa;Password=$SQLCMDPASSWORD;TrustServerCertificate=true;Connect Timeout=5"
+dotnet test
+dotnet run --project src/Polo3.Newsletter.Web &   # http://localhost:5080/newsletter
+scripts/run-scenarios.sh
+```
+
+Zastavení: ukončete `dotnet run` a spusťte `docker compose down`. Na Windows s lokálním SQL Serverem
+stačí výchozí připojovací řetězec a `sqlcmd -E` (viz níže).
+
 ## Databáze
 
 Skript počítá s existující prázdnou databází `NewsletterTest` a lze ho spustit opakovaně.
