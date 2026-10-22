@@ -1,0 +1,78 @@
+# Registrace k odběru novinek (ASP.NET Core MVC + SQL Server)
+
+Praktický úkol BE pro pozici Vývojář e-shopu POLO3. Průvodní text: [PRUVODNI_TEXT.md](PRUVODNI_TEXT.md).
+
+## Struktura
+
+| Cesta | Obsah |
+|---|---|
+| `src/Polo3.Newsletter.Web/Controllers` | `NewsletterController` – validace vstupu, volání service, výběr view |
+| `src/Polo3.Newsletter.Web/Services` | `NewsletterService` – logika, tokeny, ošetření chyb DB; `NewsletterResult`, texty hlášek |
+| `src/Polo3.Newsletter.Web/Repositories` | `NewsletterSubscriptionRepository` – volání uložených procedur (Dapper) |
+| `db/NewsletterSubscription.sql` | tabulka, indexy, 3 procedury, 2 testovací řádky |
+| `tests/Polo3.Newsletter.Tests` | jednotkové testy service vrstvy s falešným repository |
+| `scripts/run-scenarios.sh` | scénáře ze zadání (curl + sqlcmd) |
+
+## Požadavky
+
+- .NET 10 SDK
+- SQL Server 2019+ (lokální instance, nebo Docker: `docker compose up -d --wait`, heslo SA v `.env` podle `.env.example`)
+- `sqlcmd` (pro skript databáze a scénáře), `curl` a bash (pro scénáře)
+
+## Databáze
+
+Skript počítá s existující prázdnou databází `NewsletterTest` a lze ho spustit opakovaně.
+
+```bash
+sqlcmd -S localhost -E -C -Q "CREATE DATABASE NewsletterTest"
+sqlcmd -S localhost -E -C -d NewsletterTest -b -i db/NewsletterSubscription.sql
+```
+
+S přihlášením SQL (např. Docker) místo `-E` použijte `-U sa` a heslo v proměnné `SQLCMDPASSWORD`.
+
+## Připojovací řetězec
+
+Výchozí v `src/Polo3.Newsletter.Web/appsettings.json` (Windows, integrované přihlášení):
+
+```
+Server=localhost;Database=NewsletterTest;Integrated Security=true;TrustServerCertificate=true;Connect Timeout=5
+```
+
+Jiný server nebo přihlášení SQL nastavte proměnnou prostředí (heslo se do repozitáře neukládá):
+
+```bash
+export ConnectionStrings__Newsletter="Server=localhost;Database=NewsletterTest;User Id=sa;Password=<heslo>;TrustServerCertificate=true;Connect Timeout=5"
+```
+
+## Spuštění
+
+```bash
+dotnet run --project src/Polo3.Newsletter.Web
+```
+
+Aplikace běží na <http://localhost:5080/newsletter>. Odeslání e-mailu nahrazuje zápis do logu konzole:
+`Newsletter confirmation email for <adresa>: confirm <odkaz>, unsubscribe <odkaz>`.
+
+## Testy a kontroly
+
+```bash
+dotnet build -warnaserror
+dotnet test
+dotnet format --verify-no-changes
+```
+
+## Scénáře
+
+S běžící aplikací a databází:
+
+```bash
+SQLCMDPASSWORD=<heslo> scripts/run-scenarios.sh http://localhost:5080
+```
+
+Projde registraci, opakovanou registraci s jinou velikostí písmen, potvrzení, opakované potvrzení, odhlášení,
+opakované odhlášení, neznámý token, neplatný vstup, POST bez antiforgery tokenu a 10 souběžných registrací
+stejné adresy. Vypíše HTTP kód každého kroku a počet řádků; při chybě skončí nenulovým kódem.
+
+Vlastní skript: `POST /newsletter/subscribe` vyžaduje antiforgery token. Nejdřív načtěte `GET /newsletter`
+se zapnutými cookies, z formuláře vezměte `__RequestVerificationToken` a pošlete ho spolu s cookie
+(pole `Email`, `Name`, `IsConsent=true`). Výsledek je ve stránce v atributu `data-result-code`.
