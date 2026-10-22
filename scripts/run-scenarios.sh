@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # End-to-end scenarios from the assignment against a running app and its database.
 # Usage: scripts/run-scenarios.sh [baseUrl]   (default http://localhost:5080)
-# Needs curl and sqlcmd. Database access: SQLCMDSERVER (default localhost), SQLCMDUSER (default sa),
-# SQLCMDPASSWORD, SQLCMDDBNAME (default NewsletterTest).
+# Needs curl and sqlcmd. Database access: SQLCMDSERVER (default localhost), SQLCMDUSER (default sa;
+# set it empty, SQLCMDUSER=, for integrated security), SQLCMDPASSWORD, SQLCMDDBNAME (default NewsletterTest).
 set -euo pipefail
 
 BASE_URL=${1:-http://localhost:5080}
@@ -15,8 +15,11 @@ EMAIL=Scenario.Test@Example.com
 RACE_EMAIL=scenario.race@example.com
 RACE_REQUESTS=10
 
+# Empty but set SQLCMDUSER selects integrated security (-E); unset means the SQL login sa.
 sql() {
-    sqlcmd -S "${SQLCMDSERVER:-localhost}" -U "${SQLCMDUSER:-sa}" -C -d "${SQLCMDDBNAME:-NewsletterTest}" \
+    local auth=(-U "${SQLCMDUSER-sa}")
+    [ -z "${SQLCMDUSER-sa}" ] && auth=(-E)
+    sqlcmd -S "${SQLCMDSERVER:-localhost}" "${auth[@]}" -C -d "${SQLCMDDBNAME:-NewsletterTest}" \
         -h -1 -W -b -Q "SET NOCOUNT ON; $1" | tr -d '[:space:]'
 }
 
@@ -86,6 +89,11 @@ unsubscribe_token=$(sql "SELECT UnsubscribeToken FROM dbo.NewsletterSubscription
 
 code=$(get "$body" "/newsletter/confirm/$confirm_token")
 expect "3. confirm" 200 "$code" "$body" 'data-result-code="Confirmed"'
+
+code=$(post_subscribe "$body" "$EMAIL" true)
+expect "3. subscribe the active email again" 200 "$code" "$body" 'data-result-code="Subscribed"'
+expect_equal "3. rows for the active email" 1 "$(row_count "$EMAIL")"
+expect_equal "3. status stays active (2)" 2 "$(sql "SELECT Status FROM dbo.NewsletterSubscription WHERE Email = N'$EMAIL';")"
 
 code=$(get "$body" "/newsletter/confirm/$confirm_token")
 expect "4. confirm again with the used token" 200 "$code" "$body" 'data-result-code="TokenInvalid"'
