@@ -16,6 +16,7 @@ public sealed class NewsletterSubscribeModel
     public string? Name { get; set; }
 
     [Display(Name = "Souhlasím se zpracováním e-mailu pro zasílání novinek")]
+    [Required(ErrorMessage = NewsletterMessages.ConsentRequired)]
     [Range(typeof(bool), "true", "true", ErrorMessage = NewsletterMessages.ConsentRequired)]
     public bool IsConsent { get; set; }
 }

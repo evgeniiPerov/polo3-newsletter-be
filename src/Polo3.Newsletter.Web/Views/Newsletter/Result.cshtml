@@ -1,0 +1,10 @@
+@model NewsletterResult
+@{
+    ViewData["Title"] = "Odběr novinek";
+}
+
+<h1>Odběr novinek</h1>
+
+<p data-result-code="@Model.Code">@Model.Message</p>
+
+<p><a asp-action="Index">Zpět na formulář</a></p>

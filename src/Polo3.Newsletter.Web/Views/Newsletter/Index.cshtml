@@ -1,0 +1,33 @@
+@model NewsletterSubscribeModel
+@{
+    ViewData["Title"] = "Odběr novinek";
+}
+
+<h1>Odběr novinek</h1>
+
+@if (!ViewData.ModelState.IsValid)
+{
+    <div role="alert" data-result-code="@(ViewData[nameof(NewsletterResultCode)] ?? NewsletterResultCode.InvalidInput)">
+        <p>Formulář se nepodařilo odeslat.</p>
+        <div asp-validation-summary="ModelOnly"></div>
+    </div>
+}
+
+<form method="post" asp-action="Subscribe" novalidate>
+    <p>
+        <label asp-for="Email"></label>
+        <input asp-for="Email" type="email" autocomplete="email" />
+        <span asp-validation-for="Email"></span>
+    </p>
+    <p>
+        <label asp-for="Name"></label>
+        <input asp-for="Name" autocomplete="name" />
+        <span asp-validation-for="Name"></span>
+    </p>
+    <p>
+        <input asp-for="IsConsent" />
+        <label asp-for="IsConsent"></label>
+        <span asp-validation-for="IsConsent"></span>
+    </p>
+    <button type="submit">Přihlásit k odběru</button>
+</form>
