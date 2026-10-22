@@ -1,30 +1,33 @@
-# Registrace k odběru novinek (ASP.NET Core MVC + SQL Server)
+# Newsletter subscription (ASP.NET Core MVC + SQL Server)
 
-Praktický úkol BE pro pozici Vývojář e-shopu POLO3. Průvodní text: [PRUVODNI_TEXT.md](PRUVODNI_TEXT.md).
+Česky: [README.cs.md](README.cs.md)
 
-## Struktura
+## What it is
 
-| Cesta | Obsah |
+Back-end practical task for the POLO3 e-shop developer role. A small ASP.NET Core MVC app (.NET 10) that
+subscribes an email to a newsletter, confirms the subscription with a one-time token and lets the user unsubscribe.
+Sending the email is replaced by a log line with the address and the links.
+
+| Action | Behaviour |
 |---|---|
-| `src/Polo3.Newsletter.Web/Controllers` | `NewsletterController` – validace vstupu, volání service, výběr view |
-| `src/Polo3.Newsletter.Web/Services` | `NewsletterService` – logika, tokeny, ošetření chyb DB; `NewsletterResult`, texty hlášek |
-| `src/Polo3.Newsletter.Web/Repositories` | `NewsletterSubscriptionRepository` – volání uložených procedur (Dapper) |
-| `db/NewsletterSubscription.sql` | tabulka, indexy, 3 procedury, 2 testovací řádky |
-| `tests/Polo3.Newsletter.Tests` | jednotkové testy service vrstvy s falešným repository |
-| `scripts/run-scenarios.sh` | scénáře ze zadání (curl + sqlcmd) |
+| `GET /newsletter` | subscription form (email, optional name, consent) |
+| `POST /newsletter/subscribe` | stores the email as "waiting for confirmation" with a random token and logs the confirmation link; a repeated subscribe of the same email (any letter case) never creates a second row |
+| `GET /newsletter/confirm/{token}` | activates the subscription and invalidates the token; an unknown or used token shows a message, not an error |
+| `GET /newsletter/unsubscribe/{token}` | unsubscribes; calling it again is harmless |
 
-## Požadavky
+Cover text with the decisions and what was skipped (Czech, as the assignment asks): [PRUVODNI_TEXT.md](PRUVODNI_TEXT.md).
 
-- .NET 10 SDK (vyvíjeno na 10.0.113)
-- SQL Server 2019+ (lokální instance, nebo Docker: zkopírujte `.env.example` do `.env`, nastavte silné heslo SA
-  a spusťte `docker compose up -d --wait`)
-- `sqlcmd` (pro skript databáze a scénáře), `curl` a bash (pro scénáře)
+## Requirements
 
-## Rychlý start (Docker, Linux/macOS)
+- .NET 10 SDK (developed on 10.0.113)
+- SQL Server 2019+ (a local instance, or Docker via `docker-compose.yml`)
+- `sqlcmd` for the SQL script and the scenarios; `bash` and `curl` for the scenarios
+
+## Quick start (Docker, Linux/macOS)
 
 ```bash
-cp .env.example .env                      # v .env nastavte MSSQL_SA_PASSWORD (min. 8 znaků, velká/malá písmena, číslice)
-export SQLCMDPASSWORD=<stejné heslo jako v .env>
+cp .env.example .env                      # set MSSQL_SA_PASSWORD in .env (min. 8 chars, upper + lower case, digit)
+export SQLCMDPASSWORD=<same password as in .env>
 docker compose up -d --wait
 sqlcmd -S localhost -U sa -C -Q "CREATE DATABASE NewsletterTest"
 sqlcmd -S localhost -U sa -C -d NewsletterTest -b -i db/NewsletterSubscription.sql
@@ -34,48 +37,33 @@ dotnet run --project src/Polo3.Newsletter.Web &   # http://localhost:5080/newsle
 scripts/run-scenarios.sh
 ```
 
-Zastavení: ukončete `dotnet run` a spusťte `docker compose down`. Na Windows s lokálním SQL Serverem
-stačí výchozí připojovací řetězec a `sqlcmd -E` (viz níže).
+Stop: end `dotnet run` and run `docker compose down`. On Windows with a local SQL Server the default connection
+string and `sqlcmd -E` are enough (see below).
 
-## Databáze
+## Connection string
 
-Skript počítá s existující prázdnou databází `NewsletterTest` a lze ho spustit opakovaně.
-
-```bash
-sqlcmd -S localhost -E -C -Q "CREATE DATABASE NewsletterTest"
-sqlcmd -S localhost -E -C -d NewsletterTest -b -i db/NewsletterSubscription.sql
-```
-
-S přihlášením SQL (např. Docker) místo `-E` použijte `-U sa` a heslo v proměnné `SQLCMDPASSWORD`.
-Skript sám nastavuje `QUOTED_IDENTIFIER ON`, funguje tedy s klasickým i novým `sqlcmd` (ověřeno oběma).
-
-Testovací řádky: `seed.active@example.com` (aktivní, odhlášení
-`/newsletter/unsubscribe/SeedActiveUnsubscribeToken00000000000000001`) a `seed.unsubscribed@example.com` (odhlášený).
-
-## Připojovací řetězec
-
-Výchozí v `src/Polo3.Newsletter.Web/appsettings.json` (Windows, integrované přihlášení):
+Default in `src/Polo3.Newsletter.Web/appsettings.json` (Windows, integrated security):
 
 ```
 Server=localhost;Database=NewsletterTest;Integrated Security=true;TrustServerCertificate=true;Connect Timeout=5
 ```
 
-Jiný server nebo přihlášení SQL nastavte proměnnou prostředí (heslo se do repozitáře neukládá):
+For another server or SQL login, set an environment variable (no password is stored in the repository):
 
 ```bash
-export ConnectionStrings__Newsletter="Server=localhost;Database=NewsletterTest;User Id=sa;Password=<heslo>;TrustServerCertificate=true;Connect Timeout=5"
+export ConnectionStrings__Newsletter="Server=localhost;Database=NewsletterTest;User Id=sa;Password=<password>;TrustServerCertificate=true;Connect Timeout=5"
 ```
 
-## Spuštění
+## Run the app
 
 ```bash
 dotnet run --project src/Polo3.Newsletter.Web
 ```
 
-Aplikace běží na <http://localhost:5080/newsletter>. Odeslání e-mailu nahrazuje zápis do logu konzole:
-`Newsletter confirmation email for <adresa>: confirm <odkaz>, unsubscribe <odkaz>`.
+The app listens on <http://localhost:5080/newsletter>. The confirmation email is a console log line:
+`Newsletter confirmation email for <address>: confirm <link>, unsubscribe <link>`.
 
-## Testy a kontroly
+## Tests and checks
 
 ```bash
 dotnet build -warnaserror
@@ -83,21 +71,58 @@ dotnet test
 dotnet format --verify-no-changes
 ```
 
-## Scénáře
+The unit tests cover the service layer with an in-memory fake repository: valid and repeated subscribe
+(different letter case, surrounding spaces), invalid email, missing consent, too long name, unknown, malformed
+and used token, unsubscribing twice, database failure.
 
-S běžící aplikací a databází:
+## SQL script
+
+`db/NewsletterSubscription.sql` creates the table `NewsletterSubscription`, its unique indexes, the stored procedures
+`SyncNewsletterSubscriptionData`, `ConfirmNewsletterSubscription`, `UnsubscribeNewsletterSubscription` and two test rows.
+It expects an existing empty database `NewsletterTest` and can be run repeatedly.
 
 ```bash
-SQLCMDPASSWORD=<heslo> scripts/run-scenarios.sh http://localhost:5080
+sqlcmd -S localhost -E -C -Q "CREATE DATABASE NewsletterTest"
+sqlcmd -S localhost -E -C -d NewsletterTest -b -i db/NewsletterSubscription.sql
 ```
 
-Projde registraci, opakovanou registraci s jinou velikostí písmen, potvrzení, opakované potvrzení, odhlášení,
-opakované odhlášení, neznámý token, neplatný vstup, POST bez antiforgery tokenu a 10 souběžných registrací
-stejné adresy. Vypíše HTTP kód každého kroku a počet řádků; při chybě skončí nenulovým kódem.
+With SQL login (e.g. Docker) use `-U sa` instead of `-E` and the password in `SQLCMDPASSWORD`.
+The script sets `QUOTED_IDENTIFIER ON` itself, so it works with both the classic and the new `sqlcmd` (tested with both).
 
-Nedostupná databáze: zastavte SQL Server (`docker compose stop mssql`) a odešlete formulář – stránka vrátí
-HTTP 200 s hláškou „Služba je dočasně nedostupná“ (`data-result-code="ServiceUnavailable"`), výjimka je v logu.
+Test rows: `seed.active@example.com` (active, unsubscribe link
+`/newsletter/unsubscribe/SeedActiveUnsubscribeToken00000000000000001`) and `seed.unsubscribed@example.com` (unsubscribed).
 
-Vlastní skript: `POST /newsletter/subscribe` vyžaduje antiforgery token. Nejdřív načtěte `GET /newsletter`
-se zapnutými cookies, z formuláře vezměte `__RequestVerificationToken` a pošlete ho spolu s cookie
-(pole `Email`, `Name`, `IsConsent=true`). Výsledek je ve stránce v atributu `data-result-code`.
+## Scenarios
+
+With the app and the database running:
+
+```bash
+SQLCMDPASSWORD=<password> scripts/run-scenarios.sh http://localhost:5080
+```
+
+It runs: subscribe, subscribe again with different letter case, confirm, confirm again, unsubscribe, unsubscribe
+again, unknown token, invalid input, POST without the antiforgery token and 10 parallel subscribes of one address.
+It prints the HTTP status of each step and the row count, and exits non-zero on any failure.
+
+Database down: stop SQL Server (`docker compose stop mssql`) and submit the form. The page returns HTTP 200 with
+"Služba je dočasně nedostupná" (`data-result-code="ServiceUnavailable"`) and the exception is in the log.
+
+Your own script: `POST /newsletter/subscribe` needs the antiforgery token. First load `GET /newsletter` with cookies
+enabled, take `__RequestVerificationToken` from the form and send it with the cookie (fields `Email`, `Name`,
+`IsConsent=true`). The outcome is in the page's `data-result-code` attribute.
+
+## Project layout
+
+| Path | Content |
+|---|---|
+| `src/Polo3.Newsletter.Web/Controllers` | `NewsletterController`: input validation, calls the service, picks the view |
+| `src/Polo3.Newsletter.Web/Services` | `NewsletterService`: rules, tokens, database error handling; `NewsletterResult`, user messages |
+| `src/Polo3.Newsletter.Web/Repositories` | `NewsletterSubscriptionRepository`: stored procedure calls (Dapper) |
+| `db/NewsletterSubscription.sql` | table, indexes, 3 procedures, 2 test rows |
+| `tests/Polo3.Newsletter.Tests` | service layer unit tests with a fake repository |
+| `scripts/run-scenarios.sh` | assignment scenarios (curl + sqlcmd) |
+
+## Decisions
+
+Duplicate prevention, token handling, error handling, what was skipped and which checklist items do not apply
+are described in the cover text [PRUVODNI_TEXT.md](PRUVODNI_TEXT.md) (Czech).
