@@ -57,7 +57,6 @@ AS
 BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
-    SET XACT_ABORT ON;
 
     DECLARE @statusPending tinyint = 1;
     DECLARE @statusUnsubscribed tinyint = 3;
