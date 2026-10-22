@@ -14,14 +14,16 @@ public sealed class NewsletterServiceTests
     private readonly FakeNewsletterEmailSender _emailSender = new();
     private readonly NewsletterService _service;
 
-    public static TheoryData<string> InvalidEmails =>
-    [
-        "",
-        "not-an-email",
-        "a@b@c",
-        "Jan Novak <jan@example.com>",
-        new string('a', 245) + "@example.com",
-    ];
+    public static TheoryData<string, string> InvalidEmails =>
+        new()
+        {
+            { "", NewsletterMessages.EmailRequired },
+            { "   ", NewsletterMessages.EmailRequired },
+            { "not-an-email", NewsletterMessages.EmailInvalid },
+            { "a@b@c", NewsletterMessages.EmailInvalid },
+            { "Jan Novak <jan@example.com>", NewsletterMessages.EmailInvalid },
+            { new string('a', 245) + "@example.com", NewsletterMessages.EmailInvalid },
+        };
 
     public static TheoryData<string> MalformedTokens =>
     [
@@ -108,11 +110,12 @@ public sealed class NewsletterServiceTests
 
     [Theory]
     [MemberData(nameof(InvalidEmails))]
-    public async Task SubscribeWithInvalidEmailReturnsInvalidInput(string email)
+    public async Task SubscribeWithInvalidEmailReturnsInvalidInput(string email, string expectedMessage)
     {
         var result = await SubscribeAsync(email);
 
         Assert.Equal(NewsletterResultCode.InvalidInput, result.Code);
+        Assert.Equal(expectedMessage, result.Message);
         Assert.False(result.IsSuccess);
         Assert.Equal(0, _repository.CallCount);
     }

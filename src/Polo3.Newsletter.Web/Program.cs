@@ -24,3 +24,6 @@ app.MapControllers();
 app.MapGet("/", () => Results.Redirect("/newsletter"));
 
 await app.RunAsync();
+
+// Lets the test project start the app through WebApplicationFactory.
+public partial class Program;
