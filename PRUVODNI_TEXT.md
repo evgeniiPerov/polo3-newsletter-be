@@ -28,7 +28,7 @@
 
 ## Co jsem vynechal a proč
 
-E-mail (zadání ho nahrazuje logem), resx lokalizaci, styly, klientskou validaci, integrační testy repository
+Odesílání e-mailu (zadání ho nahrazuje logem), resx lokalizaci, styly, klientskou validaci, integrační testy repository
 (procedury ověřuje skript scénářů na skutečném SQL Serveru) a ochranu proti zneužití – mimo rozsah 2–4 h.
 
 ## Položky kontrolního seznamu
