@@ -101,7 +101,7 @@ dotnet test
 dotnet format --verify-no-changes
 ```
 
-38 testů: 27 jednotkových testů service vrstvy s falešným repository v paměti (platná a opakovaná registrace
+39 testů: 28 jednotkových testů service vrstvy s falešným repository v paměti (platná a opakovaná registrace
 v jakékoli velikosti písmen, už aktivní e-mail, neplatný e-mail, chybějící souhlas, příliš dlouhé jméno, neznámý,
 poškozený a použitý token, dvojí odhlášení, výpadek databáze, vyčerpaný pool, zrušený požadavek) a 11 HTTP testů
 přes `WebApplicationFactory` se stejným falešným repository (routy, antiforgery 400, `data-result-code`, HTTP 200

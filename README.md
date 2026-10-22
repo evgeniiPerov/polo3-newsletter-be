@@ -101,7 +101,7 @@ dotnet test
 dotnet format --verify-no-changes
 ```
 
-38 tests: 27 unit tests of the service layer with an in-memory fake repository (valid and repeated subscribe in
+39 tests: 28 unit tests of the service layer with an in-memory fake repository (valid and repeated subscribe in
 any letter case, already active email, invalid email, missing consent, too long name, unknown, malformed and used
 token, unsubscribing twice, database failure, pool timeout, cancelled request) and 11 HTTP tests through
 `WebApplicationFactory` with the same fake repository (routes, antiforgery 400, `data-result-code`, HTTP 200 for

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Polo3.Newsletter.Web.Models;
@@ -274,9 +275,39 @@ public sealed class NewsletterServiceTests
         Assert.Empty(_emailSender.Sent);
     }
 
+    [Fact]
+    public async Task SubscribeWhenRequestIsCancelledDuringDatabaseCallLogsDebugNotError()
+    {
+        using var cancellation = new CancellationTokenSource();
+        await cancellation.CancelAsync();
+        _repository.FailWith = new FakeDbException();
+        var logger = new CapturingLogger<NewsletterService>();
+        var service = new NewsletterService(_repository, _emailSender, Options.Create(new NewsletterOptions { BaseUrl = new Uri("https://shop.test") }), logger);
+        var model = new NewsletterSubscribeModel { Email = Email, IsConsent = true };
+
+        var result = await service.SubscribeAsync(model, cancellation.Token);
+
+        Assert.Equal(NewsletterResultCode.ServiceUnavailable, result.Code);
+        Assert.Contains(LogLevel.Debug, logger.Levels);
+        Assert.DoesNotContain(LogLevel.Error, logger.Levels);
+    }
+
     private Task<NewsletterResult> SubscribeAsync(string email, string? name = null, bool isConsent = true)
     {
         var model = new NewsletterSubscribeModel { Email = email, Name = name, IsConsent = isConsent };
         return _service.SubscribeAsync(model, CancellationToken.None);
     }
+}
+
+internal sealed class CapturingLogger<T> : ILogger<T>
+{
+    public List<LogLevel> Levels { get; } = [];
+
+    public IDisposable? BeginScope<TState>(TState state)
+        where TState : notnull => null;
+
+    public bool IsEnabled(LogLevel logLevel) => true;
+
+    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+        Levels.Add(logLevel);
 }

@@ -83,6 +83,13 @@ public sealed class NewsletterService(
         {
             return await action();
         }
+        catch (Exception exception) when (cancellationToken.IsCancellationRequested && exception is OperationCanceledException or DbException)
+        {
+            // The client disconnected or aborted the request; nobody reads the answer, so this is not an error.
+            // SqlClient reports a command cancelled mid-flight as a SqlException (a DbException), so both types count.
+            NewsletterLog.RequestCancelled(logger, operation);
+            return CreateServiceUnavailableResult();
+        }
         catch (DbException exception)
         {
             // Server down, login or query failure reported by the provider.
@@ -93,12 +100,6 @@ public sealed class NewsletterService(
         {
             // SqlClient reports an exhausted connection pool (timeout waiting for a free connection) this way, not as a DbException.
             NewsletterLog.DatabaseFailed(logger, exception, operation);
-            return CreateServiceUnavailableResult();
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            // The client disconnected or aborted the request; nobody reads the answer, so this is not an error.
-            NewsletterLog.RequestCancelled(logger, operation);
             return CreateServiceUnavailableResult();
         }
     }
@@ -117,6 +118,7 @@ public sealed class NewsletterService(
 
         if (name?.Length > NewsletterLimits.MaxNameLength)
         {
+            // {0} is the field name and {1} the max length, the same arguments StringLengthAttribute uses, so one message text serves both.
             return string.Format(CultureInfo.InvariantCulture, _nameTooLongFormat, nameof(NewsletterSubscribeModel.Name), NewsletterLimits.MaxNameLength);
         }
 
