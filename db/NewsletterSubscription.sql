@@ -46,7 +46,7 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UX_NewsletterSubscriptio
 GO
 
 -- Registers an email or refreshes a pending/unsubscribed registration; an active subscription is left unchanged.
--- Returns one row: Status, ConfirmToken (NULL when already active), UnsubscribeToken, IsNew.
+-- Returns one row: Status, ConfirmToken (NULL when already active), UnsubscribeToken.
 CREATE OR ALTER PROCEDURE dbo.SyncNewsletterSubscriptionData
     @email nvarchar(254),
     @name nvarchar(100),
@@ -57,12 +57,12 @@ AS
 BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
+    SET XACT_ABORT ON;
 
     DECLARE @statusPending tinyint = 1;
     DECLARE @statusUnsubscribed tinyint = 3;
     DECLARE @idNewsletterSubscription int;
     DECLARE @status tinyint;
-    DECLARE @isNew bit = 0;
 
     BEGIN TRANSACTION;
 
@@ -78,11 +78,11 @@ BEGIN
         VALUES (@email, @name, @isConsent, @statusPending, @confirmToken, @unsubscribeToken);
 
         SET @idNewsletterSubscription = SCOPE_IDENTITY();
-        SET @isNew = 1;
     END
     ELSE IF @status = @statusPending
     BEGIN
-        -- The existing confirm token is kept, so the link from the first email still works and is sent again.
+        -- The existing confirm token is kept so the first link keeps working; the caller sends it again.
+        -- Name and IsConsent: the latest sign-up wins.
         UPDATE dbo.NewsletterSubscription
         SET Name = @name, IsConsent = @isConsent
         WHERE IdNewsletterSubscription = @idNewsletterSubscription;
@@ -101,7 +101,7 @@ BEGIN
 
     COMMIT TRANSACTION;
 
-    SELECT Status, ConfirmToken, UnsubscribeToken, @isNew AS IsNew
+    SELECT Status, ConfirmToken, UnsubscribeToken
     FROM dbo.NewsletterSubscription
     WHERE IdNewsletterSubscription = @idNewsletterSubscription;
 END;
@@ -114,6 +114,7 @@ CREATE OR ALTER PROCEDURE dbo.ConfirmNewsletterSubscription
 AS
 BEGIN
     SET NOCOUNT ON;
+    SET XACT_ABORT ON;
 
     DECLARE @statusPending tinyint = 1;
     DECLARE @statusActive tinyint = 2;
@@ -133,6 +134,7 @@ CREATE OR ALTER PROCEDURE dbo.UnsubscribeNewsletterSubscription
 AS
 BEGIN
     SET NOCOUNT ON;
+    SET XACT_ABORT ON;
 
     DECLARE @statusUnsubscribed tinyint = 3;
 

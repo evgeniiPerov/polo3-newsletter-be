@@ -1,7 +1,9 @@
 using System.Buffers.Text;
 using System.Data.Common;
+using System.Globalization;
 using System.Net.Mail;
 using System.Security.Cryptography;
+using System.Text;
 using Microsoft.Extensions.Options;
 using Polo3.Newsletter.Web.Models;
 using Polo3.Newsletter.Web.Repositories;
@@ -14,63 +16,58 @@ public sealed class NewsletterService(
     IOptions<NewsletterOptions> options,
     ILogger<NewsletterService> logger) : INewsletterService
 {
-    // Single source for the input limits; they match the column sizes in db/NewsletterSubscription.sql.
-    public const int MaxEmailLength = 254;
-    public const int MaxNameLength = 100;
-    public const int TokenByteLength = 32;
-
-    /// <summary>Base64Url length of <see cref="TokenByteLength"/> bytes without padding.</summary>
-    public const int TokenLength = 43;
+    private static readonly CompositeFormat _nameTooLongFormat = CompositeFormat.Parse(NewsletterMessages.NameTooLong);
 
     private readonly Uri _baseUrl = options.Value.BaseUrl;
 
     public Task<NewsletterResult> SubscribeAsync(NewsletterSubscribeModel model, CancellationToken cancellationToken)
     {
         var email = model.Email.Trim();
-        var validationError = Validate(email, model.Name, model.IsConsent);
+        var name = string.IsNullOrWhiteSpace(model.Name) ? null : model.Name.Trim();
+        var validationError = Validate(email, name, model.IsConsent);
         if (validationError is not null)
         {
             return Task.FromResult(new NewsletterResult(NewsletterResultCode.InvalidInput, validationError));
         }
 
-        var request = new NewsletterSyncRequest(email, model.Name, model.IsConsent, CreateToken(), CreateToken());
-        return RunOnDatabaseAsync("subscribe", () => SyncAndSendAsync(request, cancellationToken));
+        var request = new NewsletterSyncRequest(email, name, model.IsConsent, CreateToken(), CreateToken());
+        return RunOnDatabaseAsync("subscribe", () => SyncAndSendAsync(request, cancellationToken), cancellationToken);
     }
 
     public Task<NewsletterResult> ConfirmAsync(string token, CancellationToken cancellationToken)
     {
         if (!IsWellFormedToken(token))
         {
-            return Task.FromResult(TokenInvalid());
+            return Task.FromResult(CreateTokenInvalidResult());
         }
 
         return RunOnDatabaseAsync("confirm", async () =>
             await repository.ConfirmAsync(token, cancellationToken)
                 ? new NewsletterResult(NewsletterResultCode.Confirmed, NewsletterMessages.Confirmed)
-                : TokenInvalid());
+                : CreateTokenInvalidResult(), cancellationToken);
     }
 
     public Task<NewsletterResult> UnsubscribeAsync(string token, CancellationToken cancellationToken)
     {
         if (!IsWellFormedToken(token))
         {
-            return Task.FromResult(TokenInvalid());
+            return Task.FromResult(CreateTokenInvalidResult());
         }
 
         return RunOnDatabaseAsync("unsubscribe", async () =>
             await repository.UnsubscribeAsync(token, cancellationToken) == UnsubscribeOutcome.NotFound
-                ? TokenInvalid()
-                : new NewsletterResult(NewsletterResultCode.Unsubscribed, NewsletterMessages.Unsubscribed));
+                ? CreateTokenInvalidResult()
+                : new NewsletterResult(NewsletterResultCode.Unsubscribed, NewsletterMessages.Unsubscribed), cancellationToken);
     }
 
     private async Task<NewsletterResult> SyncAndSendAsync(NewsletterSyncRequest request, CancellationToken cancellationToken)
     {
         var sync = await repository.SyncAsync(request, cancellationToken);
-        if (sync.ConfirmToken is null)
+        if (sync.Status == NewsletterSubscriptionStatus.Active)
         {
             NewsletterLog.SubscriptionAlreadyActive(logger, request.Email);
             // Same text as for a new address, so the page does not reveal who is subscribed.
-            return new NewsletterResult(NewsletterResultCode.AlreadyActive, NewsletterMessages.Subscribed);
+            return new NewsletterResult(NewsletterResultCode.Subscribed, NewsletterMessages.Subscribed);
         }
 
         var confirmUrl = new Uri(_baseUrl, $"newsletter/confirm/{sync.ConfirmToken}");
@@ -80,7 +77,7 @@ public sealed class NewsletterService(
     }
 
     /// <summary>Database failures are expected (server down, timeout): log them and give the user a message instead of a 500.</summary>
-    private async Task<NewsletterResult> RunOnDatabaseAsync(string operation, Func<Task<NewsletterResult>> action)
+    private async Task<NewsletterResult> RunOnDatabaseAsync(string operation, Func<Task<NewsletterResult>> action, CancellationToken cancellationToken)
     {
         try
         {
@@ -88,8 +85,21 @@ public sealed class NewsletterService(
         }
         catch (DbException exception)
         {
+            // Server down, login or query failure reported by the provider.
             NewsletterLog.DatabaseFailed(logger, exception, operation);
-            return new NewsletterResult(NewsletterResultCode.ServiceUnavailable, NewsletterMessages.ServiceUnavailable);
+            return CreateServiceUnavailableResult();
+        }
+        catch (InvalidOperationException exception)
+        {
+            // SqlClient reports an exhausted connection pool (timeout waiting for a free connection) this way, not as a DbException.
+            NewsletterLog.DatabaseFailed(logger, exception, operation);
+            return CreateServiceUnavailableResult();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // The client disconnected or aborted the request; nobody reads the answer, so this is not an error.
+            NewsletterLog.RequestCancelled(logger, operation);
+            return CreateServiceUnavailableResult();
         }
     }
 
@@ -100,23 +110,25 @@ public sealed class NewsletterService(
             return NewsletterMessages.EmailRequired;
         }
 
-        if (email.Length > MaxEmailLength || !MailAddress.TryCreate(email, out var address) || address.Address != email)
+        if (email.Length > NewsletterLimits.MaxEmailLength || !MailAddress.TryCreate(email, out var address) || address.Address != email)
         {
             return NewsletterMessages.EmailInvalid;
         }
 
-        if (name?.Length > MaxNameLength)
+        if (name?.Length > NewsletterLimits.MaxNameLength)
         {
-            return NewsletterMessages.NameTooLong;
+            return string.Format(CultureInfo.InvariantCulture, _nameTooLongFormat, nameof(NewsletterSubscribeModel.Name), NewsletterLimits.MaxNameLength);
         }
 
         return isConsent ? null : NewsletterMessages.ConsentRequired;
     }
 
-    private static string CreateToken() => Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(TokenByteLength));
+    private static string CreateToken() => Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(NewsletterLimits.TokenByteLength));
 
     private static bool IsWellFormedToken(string token) =>
-        token.Length == TokenLength && token.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_');
+        token.Length == NewsletterLimits.TokenLength && token.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_');
 
-    private static NewsletterResult TokenInvalid() => new(NewsletterResultCode.TokenInvalid, NewsletterMessages.TokenInvalid);
+    private static NewsletterResult CreateTokenInvalidResult() => new(NewsletterResultCode.TokenInvalid, NewsletterMessages.TokenInvalid);
+
+    private static NewsletterResult CreateServiceUnavailableResult() => new(NewsletterResultCode.ServiceUnavailable, NewsletterMessages.ServiceUnavailable);
 }

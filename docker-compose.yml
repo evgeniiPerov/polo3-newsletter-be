@@ -1,6 +1,6 @@
 services:
   db:
-    image: mcr.microsoft.com/mssql/server:2022-latest
+    image: mcr.microsoft.com/mssql/server:2022-CU27-GDR1-ubuntu-22.04
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
@@ -15,7 +15,7 @@ services:
 
   # One-shot: creates NewsletterTest if missing and runs the repo SQL script with the classic ODBC sqlcmd.
   db-init:
-    image: mcr.microsoft.com/mssql/server:2022-latest
+    image: mcr.microsoft.com/mssql/server:2022-CU27-GDR1-ubuntu-22.04
     depends_on:
       db:
         condition: service_healthy

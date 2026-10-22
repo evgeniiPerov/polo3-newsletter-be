@@ -8,11 +8,12 @@ public sealed class NewsletterSubscribeModel
     [Display(Name = "E-mail")]
     [Required(ErrorMessage = NewsletterMessages.EmailRequired)]
     [EmailAddress(ErrorMessage = NewsletterMessages.EmailInvalid)]
-    [StringLength(NewsletterService.MaxEmailLength, ErrorMessage = NewsletterMessages.EmailInvalid)]
+    [StringLength(NewsletterLimits.MaxEmailLength, ErrorMessage = NewsletterMessages.EmailInvalid)]
     public string Email { get; set; } = string.Empty;
 
     [Display(Name = "Jméno")]
-    [StringLength(NewsletterService.MaxNameLength, ErrorMessage = NewsletterMessages.NameTooLong)]
+    // StringLengthAttribute fills {1} of the message with the maximum length.
+    [StringLength(NewsletterLimits.MaxNameLength, ErrorMessage = NewsletterMessages.NameTooLong)]
     public string? Name { get; set; }
 
     [Display(Name = "Souhlasím se zpracováním e-mailu pro zasílání novinek")]

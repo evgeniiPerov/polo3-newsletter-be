@@ -10,4 +10,7 @@ internal static partial class NewsletterLog
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Newsletter {Operation} failed on the database")]
     public static partial void DatabaseFailed(ILogger logger, Exception exception, string operation);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Newsletter {Operation} stopped because the request was cancelled")]
+    public static partial void RequestCancelled(ILogger logger, string operation);
 }

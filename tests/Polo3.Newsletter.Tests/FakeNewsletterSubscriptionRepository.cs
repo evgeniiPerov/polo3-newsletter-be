@@ -3,7 +3,7 @@ using Polo3.Newsletter.Web.Repositories;
 
 namespace Polo3.Newsletter.Tests;
 
-/// <summary>In-memory stand-in for the stored procedures, with the same rules as db/NewsletterSubscription.sql.</summary>
+/// <summary>In-memory stand-in for the stored procedures, with the same status and token rules as db/NewsletterSubscription.sql.</summary>
 public sealed class FakeNewsletterSubscriptionRepository : INewsletterSubscriptionRepository
 {
     private readonly Dictionary<string, SubscriptionRow> _rows = new(StringComparer.OrdinalIgnoreCase);
@@ -32,7 +32,13 @@ public sealed class FakeNewsletterSubscriptionRepository : INewsletterSubscripti
             row.ConfirmToken = request.ConfirmToken;
         }
 
-        return Task.FromResult(new NewsletterSyncResult(row.Status, row.ConfirmToken, row.UnsubscribeToken, isNew));
+        // The latest name wins on a repeated sign-up, except for an active subscription, which stays unchanged.
+        if (row.Status != NewsletterSubscriptionStatus.Active)
+        {
+            row.Name = request.Name;
+        }
+
+        return Task.FromResult(new NewsletterSyncResult(row.Status, row.ConfirmToken, row.UnsubscribeToken));
     }
 
     public Task<bool> ConfirmAsync(string confirmToken, CancellationToken cancellationToken)
@@ -80,6 +86,8 @@ public sealed class FakeNewsletterSubscriptionRepository : INewsletterSubscripti
     public sealed class SubscriptionRow(string unsubscribeToken)
     {
         public NewsletterSubscriptionStatus Status { get; set; } = NewsletterSubscriptionStatus.Pending;
+
+        public string? Name { get; set; }
 
         public string? ConfirmToken { get; set; }
 

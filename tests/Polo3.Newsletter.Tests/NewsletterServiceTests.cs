@@ -94,14 +94,14 @@ public sealed class NewsletterServiceTests
     }
 
     [Fact]
-    public async Task SubscribeWhenAlreadyActiveReturnsNeutralMessageWithoutLink()
+    public async Task SubscribeWhenAlreadyActiveReturnsNeutralMessageWithoutNewLink()
     {
         await SubscribeAsync(Email);
         await _service.ConfirmAsync(_repository.Get(Email).ConfirmToken!, CancellationToken.None);
 
         var result = await SubscribeAsync(Email);
 
-        Assert.Equal(NewsletterResultCode.AlreadyActive, result.Code);
+        Assert.Equal(NewsletterResultCode.Subscribed, result.Code);
         Assert.Equal(NewsletterMessages.Subscribed, result.Message);
         Assert.Single(_emailSender.Sent);
     }
@@ -123,8 +123,24 @@ public sealed class NewsletterServiceTests
         var result = await SubscribeAsync(Email, name: new string('a', 101));
 
         Assert.Equal(NewsletterResultCode.InvalidInput, result.Code);
-        Assert.Equal(NewsletterMessages.NameTooLong, result.Message);
+        Assert.Equal("Jméno může mít nejvýše 100 znaků.", result.Message);
         Assert.Equal(0, _repository.CallCount);
+    }
+
+    [Fact]
+    public async Task SubscribeWithWhitespaceNameStoresNoName()
+    {
+        await SubscribeAsync(Email, name: "   ");
+
+        Assert.Null(_repository.Get(Email).Name);
+    }
+
+    [Fact]
+    public async Task SubscribeWithSurroundingSpacesInNameStoresTrimmedName()
+    {
+        await SubscribeAsync(Email, name: "  Jan Novák ");
+
+        Assert.Equal("Jan Novák", _repository.Get(Email).Name);
     }
 
     [Fact]
@@ -216,6 +232,43 @@ public sealed class NewsletterServiceTests
 
         Assert.Equal(NewsletterResultCode.ServiceUnavailable, result.Code);
         Assert.Equal(NewsletterMessages.ServiceUnavailable, result.Message);
+    }
+
+    [Fact]
+    public async Task UnsubscribeWhenDatabaseFailsReturnsServiceUnavailable()
+    {
+        _repository.FailWith = new FakeDbException();
+
+        var result = await _service.UnsubscribeAsync(new string('B', 43), CancellationToken.None);
+
+        Assert.Equal(NewsletterResultCode.ServiceUnavailable, result.Code);
+        Assert.Equal(NewsletterMessages.ServiceUnavailable, result.Message);
+    }
+
+    [Fact]
+    public async Task SubscribeWhenConnectionPoolTimesOutReturnsServiceUnavailable()
+    {
+        _repository.FailWith = new InvalidOperationException("Timeout expired. The timeout period elapsed prior to obtaining a connection from the pool.");
+
+        var result = await SubscribeAsync(Email);
+
+        Assert.Equal(NewsletterResultCode.ServiceUnavailable, result.Code);
+        Assert.Equal(NewsletterMessages.ServiceUnavailable, result.Message);
+        Assert.Empty(_emailSender.Sent);
+    }
+
+    [Fact]
+    public async Task SubscribeWhenRequestIsCancelledReturnsServiceUnavailable()
+    {
+        using var cancellation = new CancellationTokenSource();
+        await cancellation.CancelAsync();
+        _repository.FailWith = new OperationCanceledException(cancellation.Token);
+        var model = new NewsletterSubscribeModel { Email = Email, IsConsent = true };
+
+        var result = await _service.SubscribeAsync(model, cancellation.Token);
+
+        Assert.Equal(NewsletterResultCode.ServiceUnavailable, result.Code);
+        Assert.Empty(_emailSender.Sent);
     }
 
     private Task<NewsletterResult> SubscribeAsync(string email, string? name = null, bool isConsent = true)
