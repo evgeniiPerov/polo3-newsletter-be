@@ -48,7 +48,7 @@ Nedostupná databáze: `docker compose stop db` za běhu `web`, odešlete formul
 cp .env.example .env                      # v .env nastavte MSSQL_SA_PASSWORD (min. 8 znaků, velká/malá písmena, číslice)
 export SQLCMDPASSWORD=<stejné heslo jako v .env>
 docker compose up -d --wait db
-sqlcmd -S localhost -U sa -C -Q "CREATE DATABASE NewsletterTest"
+sqlcmd -S localhost -U sa -C -Q "IF DB_ID('NewsletterTest') IS NULL CREATE DATABASE NewsletterTest"
 sqlcmd -S localhost -U sa -C -d NewsletterTest -b -i db/NewsletterSubscription.sql
 export ConnectionStrings__Newsletter="Server=localhost;Database=NewsletterTest;User Id=sa;Password=$SQLCMDPASSWORD;TrustServerCertificate=true;Connect Timeout=5"
 dotnet test
@@ -58,6 +58,17 @@ scripts/run-scenarios.sh
 
 Zastavení: ukončete `dotnet run` a spusťte `docker compose down`. Na Windows s lokálním SQL Serverem
 stačí výchozí připojovací řetězec a `sqlcmd -E` (viz níže).
+
+### Windows (PowerShell)
+
+```powershell
+# jen když nepoužíváte výchozí připojovací řetězec (integrované přihlášení, lokální SQL Server):
+$env:ConnectionStrings__Newsletter = "Server=localhost;Database=NewsletterTest;User Id=sa;Password=<heslo>;TrustServerCertificate=true;Connect Timeout=5"
+dotnet test
+dotnet run --project src/Polo3.Newsletter.Web
+```
+
+Skript scénářů vyžaduje Git Bash nebo WSL.
 
 ## Připojovací řetězec
 
@@ -85,14 +96,16 @@ Aplikace běží na <http://localhost:5080/newsletter>. Potvrzovací e-mail je �
 ## Testy a kontroly
 
 ```bash
-dotnet build -warnaserror
+dotnet build
 dotnet test
 dotnet format --verify-no-changes
 ```
 
-Jednotkové testy pokrývají service vrstvu s falešným repository v paměti: platná a opakovaná registrace
-(jiná velikost písmen, mezery kolem adresy), neplatný e-mail, chybějící souhlas, příliš dlouhé jméno, neznámý,
-poškozený a použitý token, dvojí odhlášení, výpadek databáze.
+38 testů: 27 jednotkových testů service vrstvy s falešným repository v paměti (platná a opakovaná registrace
+v jakékoli velikosti písmen, už aktivní e-mail, neplatný e-mail, chybějící souhlas, příliš dlouhé jméno, neznámý,
+poškozený a použitý token, dvojí odhlášení, výpadek databáze, vyčerpaný pool, zrušený požadavek) a 11 HTTP testů
+přes `WebApplicationFactory` se stejným falešným repository (routy, antiforgery 400, `data-result-code`, HTTP 200
+u očekávaných stavů).
 
 ## SQL skript
 
@@ -101,7 +114,7 @@ poškozený a použitý token, dvojí odhlášení, výpadek databáze.
 řádky. Počítá s existující prázdnou databází `NewsletterTest` a lze ho spustit opakovaně.
 
 ```bash
-sqlcmd -S localhost -E -C -Q "CREATE DATABASE NewsletterTest"
+sqlcmd -S localhost -E -C -Q "IF DB_ID('NewsletterTest') IS NULL CREATE DATABASE NewsletterTest"
 sqlcmd -S localhost -E -C -d NewsletterTest -b -i db/NewsletterSubscription.sql
 ```
 
@@ -119,7 +132,11 @@ S běžící aplikací a databází:
 SQLCMDPASSWORD=<heslo> scripts/run-scenarios.sh http://localhost:5080
 ```
 
-Projde registraci, opakovanou registraci s jinou velikostí písmen, potvrzení, opakované potvrzení, odhlášení,
+Skript ve výchozím stavu volá `sqlcmd -U sa`. Pro integrované přihlášení ve Windows nastavte `SQLCMDUSER=`
+(prázdné) a skript zavolá `sqlcmd -E`.
+
+Projde registraci, opakovanou registraci s jinou velikostí písmen, potvrzení, opakovanou registraci už aktivního
+e-mailu (kód `Subscribed`, stále jeden řádek, stav 2), opakované potvrzení, odhlášení,
 opakované odhlášení, neznámý token, neplatný vstup, POST bez antiforgery tokenu a 10 souběžných registrací
 stejné adresy. Vypíše HTTP kód každého kroku a počet řádků; při chybě skončí nenulovým kódem.
 
@@ -138,7 +155,7 @@ se zapnutými cookies, z formuláře vezměte `__RequestVerificationToken` a po�
 | `src/Polo3.Newsletter.Web/Services` | `NewsletterService`: logika, tokeny, ošetření chyb DB; `NewsletterResult`, texty hlášek |
 | `src/Polo3.Newsletter.Web/Repositories` | `NewsletterSubscriptionRepository`: volání uložených procedur (Dapper) |
 | `db/NewsletterSubscription.sql` | tabulka, indexy, 3 procedury, 2 testovací řádky |
-| `tests/Polo3.Newsletter.Tests` | jednotkové testy service vrstvy s falešným repository |
+| `tests/Polo3.Newsletter.Tests` | jednotkové testy service vrstvy a HTTP testy (`WebApplicationFactory`) s falešným repository |
 | `scripts/run-scenarios.sh` | scénáře ze zadání (curl + sqlcmd) |
 | `Dockerfile`, `docker-compose.yml` | rychlé spuštění: `db` (SQL Server), `db-init` (spustí SQL skript), `web` (aplikace, bez roota) |
 

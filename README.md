@@ -48,7 +48,7 @@ Database down: `docker compose stop db` while `web` runs, submit the form, then 
 cp .env.example .env                      # set MSSQL_SA_PASSWORD in .env (min. 8 chars, upper + lower case, digit)
 export SQLCMDPASSWORD=<same password as in .env>
 docker compose up -d --wait db
-sqlcmd -S localhost -U sa -C -Q "CREATE DATABASE NewsletterTest"
+sqlcmd -S localhost -U sa -C -Q "IF DB_ID('NewsletterTest') IS NULL CREATE DATABASE NewsletterTest"
 sqlcmd -S localhost -U sa -C -d NewsletterTest -b -i db/NewsletterSubscription.sql
 export ConnectionStrings__Newsletter="Server=localhost;Database=NewsletterTest;User Id=sa;Password=$SQLCMDPASSWORD;TrustServerCertificate=true;Connect Timeout=5"
 dotnet test
@@ -58,6 +58,17 @@ scripts/run-scenarios.sh
 
 Stop: end `dotnet run` and run `docker compose down`. On Windows with a local SQL Server the default connection
 string and `sqlcmd -E` are enough (see below).
+
+### Windows (PowerShell)
+
+```powershell
+# only if not using the default connection string (integrated security, local SQL Server):
+$env:ConnectionStrings__Newsletter = "Server=localhost;Database=NewsletterTest;User Id=sa;Password=<password>;TrustServerCertificate=true;Connect Timeout=5"
+dotnet test
+dotnet run --project src/Polo3.Newsletter.Web
+```
+
+The scenario script needs Git Bash or WSL.
 
 ## Connection string
 
@@ -85,14 +96,16 @@ The app listens on <http://localhost:5080/newsletter>. The confirmation email is
 ## Tests and checks
 
 ```bash
-dotnet build -warnaserror
+dotnet build
 dotnet test
 dotnet format --verify-no-changes
 ```
 
-The unit tests cover the service layer with an in-memory fake repository: valid and repeated subscribe
-(different letter case, surrounding spaces), invalid email, missing consent, too long name, unknown, malformed
-and used token, unsubscribing twice, database failure.
+38 tests: 27 unit tests of the service layer with an in-memory fake repository (valid and repeated subscribe in
+any letter case, already active email, invalid email, missing consent, too long name, unknown, malformed and used
+token, unsubscribing twice, database failure, pool timeout, cancelled request) and 11 HTTP tests through
+`WebApplicationFactory` with the same fake repository (routes, antiforgery 400, `data-result-code`, HTTP 200 for
+expected outcomes).
 
 ## SQL script
 
@@ -101,7 +114,7 @@ and used token, unsubscribing twice, database failure.
 It expects an existing empty database `NewsletterTest` and can be run repeatedly.
 
 ```bash
-sqlcmd -S localhost -E -C -Q "CREATE DATABASE NewsletterTest"
+sqlcmd -S localhost -E -C -Q "IF DB_ID('NewsletterTest') IS NULL CREATE DATABASE NewsletterTest"
 sqlcmd -S localhost -E -C -d NewsletterTest -b -i db/NewsletterSubscription.sql
 ```
 
@@ -119,7 +132,11 @@ With the app and the database running:
 SQLCMDPASSWORD=<password> scripts/run-scenarios.sh http://localhost:5080
 ```
 
-It runs: subscribe, subscribe again with different letter case, confirm, confirm again, unsubscribe, unsubscribe
+The script uses `sqlcmd -U sa` by default. For Windows integrated security set `SQLCMDUSER=` (empty) and the
+script calls `sqlcmd -E`.
+
+It runs: subscribe, subscribe again with different letter case, confirm, subscribe the active email again (code
+`Subscribed`, still one row, status 2), confirm again, unsubscribe, unsubscribe
 again, unknown token, invalid input, POST without the antiforgery token and 10 parallel subscribes of one address.
 It prints the HTTP status of each step and the row count, and exits non-zero on any failure.
 
@@ -138,7 +155,7 @@ enabled, take `__RequestVerificationToken` from the form and send it with the co
 | `src/Polo3.Newsletter.Web/Services` | `NewsletterService`: rules, tokens, database error handling; `NewsletterResult`, user messages |
 | `src/Polo3.Newsletter.Web/Repositories` | `NewsletterSubscriptionRepository`: stored procedure calls (Dapper) |
 | `db/NewsletterSubscription.sql` | table, indexes, 3 procedures, 2 test rows |
-| `tests/Polo3.Newsletter.Tests` | service layer unit tests with a fake repository |
+| `tests/Polo3.Newsletter.Tests` | service layer unit tests and HTTP tests (`WebApplicationFactory`) with a fake repository |
 | `scripts/run-scenarios.sh` | assignment scenarios (curl + sqlcmd) |
 | `Dockerfile`, `docker-compose.yml` | quick run: `db` (SQL Server), `db-init` (runs the SQL script), `web` (the app, non-root) |
 
