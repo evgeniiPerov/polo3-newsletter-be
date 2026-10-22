@@ -5,9 +5,9 @@
 - Tři akce ze zadání a formulář (`GET /newsletter`). Vrstvy: `NewsletterController` (jen validace vstupu,
   volání service, výběr view) → `NewsletterService` (logika) → `NewsletterSubscriptionRepository`
   (Dapper, výhradně uložené procedury). Závislosti přes DI v `Program.cs`.
-- SQL skript: tabulka `NewsletterSubscription`, unikátní index na `Email`, filtrované unikátní indexy na tokenech,
-  procedury `SyncNewsletterSubscriptionData`, `ConfirmNewsletterSubscription`, `UnsubscribeNewsletterSubscription`,
-  2 testovací řádky. Hlavička uvádí cílovou DB; skript lze spustit opakovaně.
+- SQL skript: tabulka `NewsletterSubscription`, unikátní index na `Email`, unikátní indexy na tokenech
+  (na `ConfirmToken` filtrovaný, protože po potvrzení je NULL), procedury `SyncNewsletterSubscriptionData`,
+  `ConfirmNewsletterSubscription`, `UnsubscribeNewsletterSubscription`, 2 testovací řádky. Hlavička uvádí cílovou DB; skript lze spustit opakovaně.
 - 20 jednotkových testů service vrstvy (14 metod) s falešným repository: platná a opakovaná registrace
   (i jiná velikost písmen a mezery), neplatný e-mail, chybějící souhlas, dlouhé jméno, neznámý, poškozený
   a použitý token, dvojí odhlášení, výpadek DB.
@@ -26,7 +26,11 @@
   na NULL, `UnsubscribeToken` zůstává pro odhlášení. Token s jiným tvarem se odmítne bez dotazu do DB.
 - **Chyby:** service vrací `NewsletterResult` (kód + hláška pro uživatele), obdobu `FactoryResult`. Výjimky DB
   (`DbException`) zachytí service, zaloguje přes `ILogger` a vrátí hlášku „Služba je dočasně nedostupná“.
-  Všechny očekávané stavy vrací view s HTTP 200; neočekávaná chyba skončí na stránce `/error`.
+  Všechny očekávané stavy vrací view s HTTP 200 (POST bez antiforgery tokenu odmítne framework kódem 400);
+  neočekávaná chyba skončí na stránce `/error`.
+- **Validace dvakrát:** atributy modelu dávají hlášky ve formuláři, service vstup ověřuje znovu, protože
+  pravidla patří do business vrstvy a testují se tam. Limity délek jsou jen v jedné konstantě.
+- **`data-result-code`:** atribut ve výsledkové stránce slouží skriptu scénářů, aby nezávisel na znění hlášek.
 - **Název `NewsletterService`:** ponechán ze zadání; v projektu by odpovídal `…Factory`.
 - **Čistota:** `TreatWarningsAsErrors`, `AnalysisLevel latest-recommended`, pravidla pojmenování v `.editorconfig`,
   logování přes `[LoggerMessage]`, texty hlášek na jednom místě (`NewsletterMessages`).

@@ -1,6 +1,7 @@
 using System.Data;
 using Dapper;
 using Microsoft.Data.SqlClient;
+using Polo3.Newsletter.Web.Services;
 
 namespace Polo3.Newsletter.Web.Repositories;
 
@@ -11,15 +12,13 @@ public sealed class NewsletterSubscriptionRepository(string connectionString) : 
     private const string ConfirmProcedure = "dbo.ConfirmNewsletterSubscription";
     private const string UnsubscribeProcedure = "dbo.UnsubscribeNewsletterSubscription";
     private const int TokenColumnLength = 64;
-    private const int EmailColumnLength = 254;
-    private const int NameColumnLength = 100;
 
     public async Task<NewsletterSyncResult> SyncAsync(NewsletterSyncRequest request, CancellationToken cancellationToken)
     {
         var parameters = new
         {
-            email = new DbString { Value = request.Email, Length = EmailColumnLength },
-            name = new DbString { Value = request.Name, Length = NameColumnLength },
+            email = new DbString { Value = request.Email, Length = NewsletterService.MaxEmailLength },
+            name = new DbString { Value = request.Name, Length = NewsletterService.MaxNameLength },
             isConsent = request.IsConsent,
             confirmToken = Token(request.ConfirmToken),
             unsubscribeToken = Token(request.UnsubscribeToken),

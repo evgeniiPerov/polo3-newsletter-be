@@ -14,6 +14,7 @@ public sealed class NewsletterService(
     IOptions<NewsletterOptions> options,
     ILogger<NewsletterService> logger) : INewsletterService
 {
+    // Single source for the input limits; they match the column sizes in db/NewsletterSubscription.sql.
     public const int MaxEmailLength = 254;
     public const int MaxNameLength = 100;
     public const int TokenByteLength = 32;
