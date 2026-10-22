@@ -64,7 +64,7 @@ public sealed partial class NewsletterEndpointTests : IDisposable
 
         var page = await PostSubscribeAsync(Email);
 
-        AssertPage(page, NewsletterResultCode.ServiceUnavailable, "Služba je dočasně nedostupná");
+        AssertPage(page, NewsletterResultCode.ServiceUnavailable, NewsletterMessages.ServiceUnavailable);
     }
 
     [Fact]
@@ -74,7 +74,7 @@ public sealed partial class NewsletterEndpointTests : IDisposable
 
         var page = await GetPageAsync($"/newsletter/unsubscribe/{new string('a', NewsletterLimits.TokenLength)}");
 
-        AssertPage(page, NewsletterResultCode.ServiceUnavailable, "Služba je dočasně nedostupná");
+        AssertPage(page, NewsletterResultCode.ServiceUnavailable, NewsletterMessages.ServiceUnavailable);
     }
 
     [Fact]

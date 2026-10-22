@@ -91,9 +91,9 @@ code=$(get "$body" "/newsletter/confirm/$confirm_token")
 expect "3. confirm" 200 "$code" "$body" 'data-result-code="Confirmed"'
 
 code=$(post_subscribe "$body" "$EMAIL" true)
-expect "3. subscribe the active email again" 200 "$code" "$body" 'data-result-code="Subscribed"'
-expect_equal "3. rows for the active email" 1 "$(row_count "$EMAIL")"
-expect_equal "3. status stays active (2)" 2 "$(sql "SELECT Status FROM dbo.NewsletterSubscription WHERE Email = N'$EMAIL';")"
+expect "3b. subscribe the active email again" 200 "$code" "$body" 'data-result-code="Subscribed"'
+expect_equal "3b. rows for the active email" 1 "$(row_count "$EMAIL")"
+expect_equal "3b. status stays active (2)" 2 "$(sql "SELECT Status FROM dbo.NewsletterSubscription WHERE Email = N'$EMAIL';")"
 
 code=$(get "$body" "/newsletter/confirm/$confirm_token")
 expect "4. confirm again with the used token" 200 "$code" "$body" 'data-result-code="TokenInvalid"'
