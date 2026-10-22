@@ -67,7 +67,20 @@ public sealed class NewsletterServiceTests
         Assert.Equal(NewsletterResultCode.Subscribed, second.Code);
         Assert.Equal(1, _repository.Count);
         Assert.Equal(2, _emailSender.Sent.Count);
-        Assert.NotEqual(firstToken, _repository.Get(Email).ConfirmToken);
+        Assert.Equal(firstToken, _repository.Get(Email).ConfirmToken);
+        Assert.Equal(_emailSender.Sent[0].ConfirmUrl, _emailSender.Sent[1].ConfirmUrl);
+    }
+
+    [Fact]
+    public async Task SubscribeAgainWhilePendingKeepsFirstLinkValid()
+    {
+        await SubscribeAsync(Email);
+        var firstUrl = _emailSender.Sent[0].ConfirmUrl;
+        await SubscribeAsync(Email);
+
+        var result = await _service.ConfirmAsync(firstUrl.Segments[^1], CancellationToken.None);
+
+        Assert.Equal(NewsletterResultCode.Confirmed, result.Code);
     }
 
     [Fact]

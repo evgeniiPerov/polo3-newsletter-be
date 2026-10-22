@@ -26,7 +26,7 @@ public sealed class FakeNewsletterSubscriptionRepository : INewsletterSubscripti
             _rows[request.Email] = row;
         }
 
-        if (row.Status != NewsletterSubscriptionStatus.Active)
+        if (isNew || row.Status == NewsletterSubscriptionStatus.Unsubscribed)
         {
             row.Status = NewsletterSubscriptionStatus.Pending;
             row.ConfirmToken = request.ConfirmToken;

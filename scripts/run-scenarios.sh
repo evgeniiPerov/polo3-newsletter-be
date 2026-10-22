@@ -65,6 +65,12 @@ expect_equal() {
     fi
 }
 
+for _ in $(seq 1 30); do
+    curl -sf -o /dev/null "$BASE_URL/newsletter" && break
+    sleep 1
+done
+curl -sf -o /dev/null "$BASE_URL/newsletter" || { echo "App is not answering on $BASE_URL"; exit 1; }
+
 body="$TEMP_DIR/body.html"
 sql "DELETE FROM dbo.NewsletterSubscription WHERE Email LIKE N'scenario%@example.com';" >/dev/null
 

@@ -82,9 +82,9 @@ BEGIN
     END
     ELSE IF @status = @statusPending
     BEGIN
-        -- A new link replaces the previous one, so only the most recently sent link works.
+        -- The existing confirm token is kept, so the link from the first email still works and is sent again.
         UPDATE dbo.NewsletterSubscription
-        SET Name = @name, IsConsent = @isConsent, ConfirmToken = @confirmToken
+        SET Name = @name, IsConsent = @isConsent
         WHERE IdNewsletterSubscription = @idNewsletterSubscription;
     END
     ELSE IF @status = @statusUnsubscribed

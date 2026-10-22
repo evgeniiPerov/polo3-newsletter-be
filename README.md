@@ -15,8 +15,9 @@ Praktický úkol BE pro pozici Vývojář e-shopu POLO3. Průvodní text: [PRUVO
 
 ## Požadavky
 
-- .NET 10 SDK
-- SQL Server 2019+ (lokální instance, nebo Docker: `docker compose up -d --wait`, heslo SA v `.env` podle `.env.example`)
+- .NET 10 SDK (vyvíjeno na 10.0.113)
+- SQL Server 2019+ (lokální instance, nebo Docker: zkopírujte `.env.example` do `.env`, nastavte silné heslo SA
+  a spusťte `docker compose up -d --wait`)
 - `sqlcmd` (pro skript databáze a scénáře), `curl` a bash (pro scénáře)
 
 ## Databáze
@@ -29,6 +30,10 @@ sqlcmd -S localhost -E -C -d NewsletterTest -b -i db/NewsletterSubscription.sql
 ```
 
 S přihlášením SQL (např. Docker) místo `-E` použijte `-U sa` a heslo v proměnné `SQLCMDPASSWORD`.
+Skript sám nastavuje `QUOTED_IDENTIFIER ON`, funguje tedy s klasickým i novým `sqlcmd` (ověřeno oběma).
+
+Testovací řádky: `seed.active@example.com` (aktivní, odhlášení
+`/newsletter/unsubscribe/SeedActiveUnsubscribeToken00000000000000001`) a `seed.unsubscribed@example.com` (odhlášený).
 
 ## Připojovací řetězec
 
@@ -72,6 +77,9 @@ SQLCMDPASSWORD=<heslo> scripts/run-scenarios.sh http://localhost:5080
 Projde registraci, opakovanou registraci s jinou velikostí písmen, potvrzení, opakované potvrzení, odhlášení,
 opakované odhlášení, neznámý token, neplatný vstup, POST bez antiforgery tokenu a 10 souběžných registrací
 stejné adresy. Vypíše HTTP kód každého kroku a počet řádků; při chybě skončí nenulovým kódem.
+
+Nedostupná databáze: zastavte SQL Server (`docker compose stop mssql`) a odešlete formulář – stránka vrátí
+HTTP 200 s hláškou „Služba je dočasně nedostupná“ (`data-result-code="ServiceUnavailable"`), výjimka je v logu.
 
 Vlastní skript: `POST /newsletter/subscribe` vyžaduje antiforgery token. Nejdřív načtěte `GET /newsletter`
 se zapnutými cookies, z formuláře vezměte `__RequestVerificationToken` a pošlete ho spolu s cookie
